@@ -1,0 +1,3 @@
+# Runtime dependencies (also in pyproject.toml)
+aiohttp>=3.8.0
+typing-extensions>=4.0.0
