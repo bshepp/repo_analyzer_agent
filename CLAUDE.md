@@ -97,5 +97,7 @@ See `pyproject.toml` for optional dev deps (pytest, black, ruff).
 - The async generator (`scout_repositories`) yields one repo at a time — memory stays flat even on large crawls.
 - GitHub API rate limiting handled automatically; budget reserved via `GITHUB_RATE_LIMIT_BUFFER`.
 - To add a new MCP SDK signal: extend `Config.MCP_SDK_DEPS` and (if relevant) `Config.MCP_CODE_PATTERNS`. No analyzer change needed.
+- To add a brand-new language family: also add the manifest filename(s) to `Config.MANIFEST_LANGUAGE_MAP` so per-language scoping in `_scan_manifests` picks them up.
 - To add a new transport: extend `Config.TRANSPORT_PATTERNS` and add a tag in scorer if you want it surfaced.
+- Code recursion in `_scan_code` walks two levels deep through directories in the local `_CODE_SUBDIRS` set in `analyzer.py`; extend that set if MCP servers in a new ecosystem put their code somewhere unexpected.
 - `RepositoryScout` is kept as an alias of `MCPScout` for any external callers that still import the old name.
