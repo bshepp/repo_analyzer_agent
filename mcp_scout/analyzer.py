@@ -14,22 +14,31 @@ from .models import RepositoryAnalysis, RepositoryMetadata
 logger = logging.getLogger(__name__)
 
 
-# Files we sniff for dependency declarations across ecosystems
-_DEP_MANIFEST_NAMES = {
-    "pyproject.toml",
-    "requirements.txt",
-    "setup.py",
-    "setup.cfg",
-    "package.json",
-    "go.mod",
-    "Cargo.toml",
-    "pom.xml",
-    "build.gradle",
-    "build.gradle.kts",
-}
+# Files we sniff for dependency declarations across ecosystems.
+# The actual file → language mapping lives in Config.MANIFEST_LANGUAGE_MAP.
+_DEP_MANIFEST_NAMES = set(Config.MANIFEST_LANGUAGE_MAP.keys()) | {"Pipfile"}
 
 # File extensions worth scanning for code-level MCP signals
 _CODE_EXTENSIONS = (".py", ".ts", ".tsx", ".js", ".mjs", ".go", ".rs", ".java", ".kt")
+
+# Directories we'll recurse into looking for MCP server code. Covers Python
+# (src/, app/), TS/JS monorepos (packages/, src/), Go (cmd/, pkg/, internal/),
+# Rust (src/), Java (lib/), and generic MCP layouts (server/, mcp/, handlers/).
+_CODE_SUBDIRS = {
+    "src", "server", "mcp", "app", "cmd", "pkg",
+    "internal", "lib", "packages", "tools", "handlers",
+}
+
+
+def _dep_match(content: str, dep: str) -> bool:
+    """True if `dep` appears in `content` as a standalone token.
+
+    A 'standalone token' means the dep is not adjacent to a word character,
+    dot, or hyphen on either side. This prevents `"mcp"` from matching
+    `mcp-server`, `mcp.go`, `pythonmcp`, etc.
+    """
+    pattern = rf"(?<![\w.-]){re.escape(dep)}(?![\w.-])"
+    return re.search(pattern, content) is not None
 
 
 class RepositoryAnalyzer:
@@ -85,11 +94,16 @@ class RepositoryAnalyzer:
     ) -> Tuple[Set[str], Optional[str]]:
         """Look for MCP SDK declarations in dependency files.
 
-        Returns (signals, sdk_language). sdk_language is the first SDK family
-        we find a hit for; if none, returns None.
+        Each manifest is scoped to its language: only Python SDKs are checked
+        in Python manifests, only TS SDKs in package.json, etc. This avoids
+        false-positive Python tags on Go/TS/Rust repos that happen to mention
+        an MCP-related string in their manifest.
+
+        Returns (signals, sdk_language). When multiple languages match, we
+        prefer the one matching the repo's primary GitHub-detected language.
         """
         signals: Set[str] = set()
-        sdk_language: Optional[str] = None
+        per_language_hits: Dict[str, int] = {}
 
         manifest_files = [
             f for f in contents
@@ -97,19 +111,45 @@ class RepositoryAnalyzer:
         ]
 
         for file_info in manifest_files:
+            language = Config.MANIFEST_LANGUAGE_MAP.get(file_info["name"])
+            if not language:
+                continue
+            deps = Config.MCP_SDK_DEPS.get(language, [])
+            if not deps:
+                continue
+
             content = await self.github_client.get_file_content(
                 metadata.owner, metadata.name, file_info["path"]
             )
             if not content:
                 continue
-            for language, deps in Config.MCP_SDK_DEPS.items():
-                for dep in deps:
-                    if dep in content:
-                        signals.add(f"manifest:{dep}")
-                        if sdk_language is None:
-                            sdk_language = language
 
+            for dep in deps:
+                if _dep_match(content, dep):
+                    signals.add(f"manifest:{dep}")
+                    per_language_hits[language] = per_language_hits.get(language, 0) + 1
+
+        sdk_language = self._pick_sdk_language(per_language_hits, metadata.language)
         return signals, sdk_language
+
+    @staticmethod
+    def _pick_sdk_language(
+        hits: Dict[str, int], primary_language: Optional[str]
+    ) -> Optional[str]:
+        """Resolve detected SDK language.
+
+        Prefer the one that matches the repo's primary GitHub language;
+        otherwise pick the one with the most manifest hits.
+        """
+        if not hits:
+            return None
+        if primary_language:
+            primary_lower = primary_language.lower()
+            # GitHub reports TypeScript/JavaScript separately; both map to "typescript"
+            primary_norm = "typescript" if primary_lower in ("javascript",) else primary_lower
+            if primary_norm in hits:
+                return primary_norm
+        return max(hits.items(), key=lambda kv: kv[1])[0]
 
     # ---------- code ----------
 
@@ -125,16 +165,17 @@ class RepositoryAnalyzer:
             f for f in contents
             if f.get("type") == "file"
             and f.get("name", "").lower().endswith(_CODE_EXTENSIONS)
-        ][: Config.CODE_SAMPLE_SIZE]
+        ]
 
-        # Also peek into common server-named subdirs (src/, server/) one level deep
-        # to catch repos that don't have code at the root.
+        # Walk two levels deep into the directories most likely to contain
+        # MCP server code, across Python/TS/Go/Rust/Java layouts.
         candidate_dirs = [
             f for f in contents
-            if f.get("type") == "dir"
-            and f.get("name", "").lower() in {"src", "server", "mcp", "app"}
+            if f.get("type") == "dir" and f.get("name", "").lower() in _CODE_SUBDIRS
         ]
-        for dir_info in candidate_dirs[:2]:
+        for dir_info in candidate_dirs:
+            if len(code_files) >= Config.CODE_SAMPLE_SIZE:
+                break
             sub = await self.github_client.get_repository_contents(
                 metadata.owner, metadata.name, dir_info["path"]
             )
@@ -143,8 +184,24 @@ class RepositoryAnalyzer:
                 if f.get("type") == "file"
                 and f.get("name", "").lower().endswith(_CODE_EXTENSIONS)
             )
-            if len(code_files) >= Config.CODE_SAMPLE_SIZE:
-                break
+            # One more level: monorepos (packages/*/, src/*/) often have a
+            # per-server src/index.ts or cmd/<name>/main.go
+            sub_dirs = [
+                f for f in sub
+                if f.get("type") == "dir"
+                and not f.get("name", "").startswith(".")
+            ]
+            for sub_dir in sub_dirs[:4]:
+                if len(code_files) >= Config.CODE_SAMPLE_SIZE:
+                    break
+                deeper = await self.github_client.get_repository_contents(
+                    metadata.owner, metadata.name, sub_dir["path"]
+                )
+                code_files.extend(
+                    f for f in deeper
+                    if f.get("type") == "file"
+                    and f.get("name", "").lower().endswith(_CODE_EXTENSIONS)
+                )
 
         # Cap to a reasonable budget
         code_files = code_files[: Config.CODE_SAMPLE_SIZE]

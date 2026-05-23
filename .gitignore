@@ -134,6 +134,8 @@ dmypy.json
 results.*
 scout_cache/
 .github_token
+test_*.json
+claude_desktop_config*.json
 
 # IDE / agent
 .vscode/

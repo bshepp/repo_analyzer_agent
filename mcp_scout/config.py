@@ -39,7 +39,7 @@ class Config:
 
     # Analysis settings
     README_MAX_LENGTH: int = 50000
-    CODE_SAMPLE_SIZE: int = 12  # MCP servers are usually small; sample a few more
+    CODE_SAMPLE_SIZE: int = 30  # Cap on code files we'll fetch per repo
 
     # Scoring weights (sum to 1.0). Tuned for "is this a real MCP server?"
     SCORING_WEIGHTS: Dict[str, float] = {
@@ -66,6 +66,23 @@ class Config:
         "AGPL-3.0": 0.5,
         "EPL-2.0": 0.7,
         "CC0-1.0": 0.9,
+    }
+
+    # Map manifest filename → language family. Used to scope which SDK deps
+    # we check in which file, so a TS package.json containing "mcp-go" doesn't
+    # get tagged as a Python repo.
+    MANIFEST_LANGUAGE_MAP: Dict[str, str] = {
+        "pyproject.toml": "python",
+        "requirements.txt": "python",
+        "setup.py": "python",
+        "setup.cfg": "python",
+        "Pipfile": "python",
+        "package.json": "typescript",
+        "go.mod": "go",
+        "Cargo.toml": "rust",
+        "pom.xml": "java",
+        "build.gradle": "java",
+        "build.gradle.kts": "java",
     }
 
     # MCP SDK / package signals — presence in deps is strong evidence
