@@ -1,13 +1,13 @@
 """Scorer tests."""
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, timedelta, timezone
 
 import pytest
 
-from repo_scout.models import RepositoryMetadata, RepositoryAnalysis, RepositoryScore
-from repo_scout.scorer import RepositoryScorer
+from mcp_scout.models import RepositoryAnalysis, RepositoryMetadata, RepositoryScore
+from mcp_scout.scorer import RepositoryScorer
 
 
-def _meta(updated_days_ago: int = 0, license_name: str = "MIT"):
+def _meta(updated_days_ago: int = 0, license_name: str = "MIT") -> RepositoryMetadata:
     now = datetime.now(timezone.utc)
     updated = now - timedelta(days=updated_days_ago)
     return RepositoryMetadata(
@@ -35,51 +35,92 @@ def _meta(updated_days_ago: int = 0, license_name: str = "MIT"):
     )
 
 
-def _analysis(has_cli=True, has_api=True, has_docs=True, doc_quality=0.8, maintenance=1.0):
+def _analysis(
+    is_mcp_server: bool = True,
+    tools: int = 4,
+    resources: int = 1,
+    prompts: int = 0,
+    has_install: bool = True,
+    sdk: str | None = "python",
+    transports=None,
+    doc_quality: float = 0.8,
+    maintenance: float = 1.0,
+    signals=None,
+) -> RepositoryAnalysis:
     return RepositoryAnalysis(
-        has_cli=has_cli,
-        has_api=has_api,
-        has_documentation=has_docs,
+        is_mcp_server=is_mcp_server,
+        mcp_sdk_language=sdk,
+        mcp_tools_count=tools,
+        mcp_resources_count=resources,
+        mcp_prompts_count=prompts,
+        mcp_transports=transports if transports is not None else ["stdio"],
+        has_install_snippet=has_install,
         documentation_quality=doc_quality,
-        code_complexity=0.2,
-        modularity_score=0.8,
         maintenance_score=maintenance,
-        detected_frameworks=["flask", "click"],
-        detected_patterns=["api", "cli"],
+        detected_signals=signals if signals is not None else [
+            "manifest:mcp",
+            "code:from mcp",
+            "readme:mcp server",
+        ],
         readme_summary="Summary",
     )
 
 
 def test_score_repository_returns_score():
     scorer = RepositoryScorer()
-    meta = _meta(updated_days_ago=7)
-    analysis = _analysis()
-    score = scorer.score_repository(meta, analysis)
+    score = scorer.score_repository(_meta(updated_days_ago=7), _analysis())
     assert isinstance(score, RepositoryScore)
     assert 0 <= score.total_score <= 100
-    assert score.agent_friendliness in ("high", "medium", "low")
+    assert score.mcp_readiness in ("high", "medium", "low")
 
 
-def test_score_high_with_cli_api_docs():
+def test_score_high_with_full_mcp_signals():
     scorer = RepositoryScorer()
-    meta = _meta(updated_days_ago=1)
-    analysis = _analysis(has_cli=True, has_api=True, has_docs=True, doc_quality=0.9)
-    score = scorer.score_repository(meta, analysis)
+    score = scorer.score_repository(_meta(updated_days_ago=1), _analysis(tools=8))
     assert score.total_score >= 70
-    assert "cli" in score.tags and "api" in score.tags
+    assert "stdio" in score.tags
+    assert "python-mcp" in score.tags
+    assert score.mcp_readiness in ("high", "medium")
 
 
 def test_score_license_mit_full():
     scorer = RepositoryScorer()
-    meta = _meta(license_name="MIT")
-    analysis = _analysis()
-    score = scorer.score_repository(meta, analysis)
+    score = scorer.score_repository(_meta(license_name="MIT"), _analysis())
     assert score.license_score == 100.0
 
 
-def test_categorize_high_medium_low():
+def test_non_mcp_repo_categorized_low():
+    """Repos that fail is_mcp_server gate are always 'low' regardless of total."""
     scorer = RepositoryScorer()
-    meta_old = _meta(updated_days_ago=400)
-    analysis_low = _analysis(has_cli=False, has_api=False, has_docs=False, doc_quality=0.0)
-    score_low = scorer.score_repository(meta_old, analysis_low)
-    assert score_low.agent_friendliness == "low"
+    analysis = _analysis(
+        is_mcp_server=False,
+        tools=0,
+        resources=0,
+        prompts=0,
+        has_install=False,
+        sdk=None,
+        transports=[],
+        signals=[],
+    )
+    score = scorer.score_repository(_meta(updated_days_ago=1), analysis)
+    assert score.mcp_readiness == "low"
+
+
+def test_zero_tools_gives_zero_richness():
+    scorer = RepositoryScorer()
+    analysis = _analysis(tools=0, resources=0, prompts=0)
+    score = scorer.score_repository(_meta(), analysis)
+    assert score.tool_richness_score == 0.0
+
+
+def test_tool_count_buckets():
+    scorer = RepositoryScorer()
+    # 10+ tools should be tagged tools:10+
+    score = scorer.score_repository(_meta(), _analysis(tools=12))
+    assert "tools:10+" in score.tags
+
+
+def test_install_snippet_tag():
+    scorer = RepositoryScorer()
+    score = scorer.score_repository(_meta(), _analysis(has_install=True))
+    assert "has-install-snippet" in score.tags

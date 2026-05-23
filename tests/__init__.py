@@ -1,1 +1,1 @@
-# Tests for Repository Scout
+# Tests for MCP Scout
