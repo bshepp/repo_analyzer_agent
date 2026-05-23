@@ -4,7 +4,7 @@
 
 MCP Scout is an async Python CLI that crawls GitHub, detects which repositories are real MCP servers, and ranks them on how usable they are. Output is JSONL/JSON/CSV plus an optional `claude_desktop_config.json` snippet you can paste straight into your client.
 
-It is a pivot from the original *Repository Scout* (generic AI-agent repo discovery). The MCP ecosystem grew up, "does it have a CLI" stopped being the interesting question, and "does it expose an MCP server" became one.
+It is a pivot from the original *Repository Scout* (generic AI-agent repo discovery). The MCP ecosystem grew up, "does it have a CLI" stopped being the interesting question, and "does it expose an MCP server" became one. See [`ORIGIN.md`](./ORIGIN.md) for the full backstory.
 
 ## Scoring System
 
