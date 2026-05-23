@@ -3,14 +3,14 @@ requires = ["setuptools>=61", "wheel"]
 build-backend = "setuptools.build_meta"
 
 [project]
-name = "repo-scout"
-version = "0.1.0"
-description = "AI Agent-Friendly Repository Discovery Tool"
+name = "mcp-scout"
+version = "0.2.0"
+description = "MCP server discovery and scoring across GitHub"
 readme = "README.md"
 license = { text = "MIT" }
 requires-python = ">=3.9"
-authors = [{ name = "Repository Scout Team" }]
-keywords = ["github", "repository", "discovery", "ai", "agent", "analysis", "scoring"]
+authors = [{ name = "MCP Scout Contributors" }]
+keywords = ["github", "mcp", "model-context-protocol", "discovery", "ai", "agent", "scoring", "claude"]
 classifiers = [
     "Development Status :: 3 - Alpha",
     "Intended Audience :: Developers",
@@ -37,11 +37,11 @@ dev = [
 ]
 
 [project.scripts]
-repo-scout = "repo_scout.cli:main"
+mcp-scout = "mcp_scout.cli:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["repo_scout*"]
+include = ["mcp_scout*"]
 
 [tool.black]
 line-length = 88

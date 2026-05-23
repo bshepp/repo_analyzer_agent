@@ -3,8 +3,8 @@ from datetime import datetime, timezone
 
 import pytest
 
-from repo_scout.github_client import GitHubClient, RateLimitInfo
-from repo_scout.models import RepositoryMetadata
+from mcp_scout.github_client import GitHubClient, RateLimitInfo
+from mcp_scout.models import RepositoryMetadata
 
 
 def test_parse_repository_metadata():

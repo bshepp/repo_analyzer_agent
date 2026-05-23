@@ -128,7 +128,7 @@ dmypy.json
 # Pyre type checker
 .pyre/
 
-# Repository Scout specific
+# MCP Scout specific
 *.jsonl
 *.csv
 results.*
