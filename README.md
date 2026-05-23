@@ -29,8 +29,8 @@ Repository Scout evaluates repositories based on:
 
 ```bash
 # Clone the repository
-git clone https://github.com/repo-scout/repo-scout.git
-cd repo-scout
+git clone https://github.com/bshepp/repo_analyzer_agent.git
+cd repo_analyzer_agent
 
 # Create a virtual environment (recommended)
 python -m venv .venv
@@ -169,6 +169,18 @@ black repo_scout tests
 
 See `CLAUDE.md` for architecture and entry points.
 
+## 🗺️ Roadmap
+
+Ideas for continued development:
+
+- **MCP server detection** — flag repos that expose a Model Context Protocol server (a strong "agent-ready" signal).
+- **Additional Git hosts** — extend beyond GitHub to GitLab, Codeberg, and Gitea.
+- **Local caching layer** — persist analyses (sqlite) so re-runs only re-analyze stale repos.
+- **More languages** — current detection patterns are Python-centric; add JS/TS, Go, Rust signal sets.
+- **Examples directory** — committed sample runs (JSONL outputs) for common queries.
+- **CI workflow** — GitHub Actions to run pytest + ruff + black on PRs.
+- **Web dashboard** — read JSONL output into a small static UI for browsing/filtering scored repos.
+
 ## 🤝 Contributing
 
 1. Fork the repository
@@ -183,9 +195,8 @@ MIT License - see LICENSE file for details.
 
 ## 📬 Support
 
-- **Issues**: [GitHub Issues](https://github.com/repo-scout/repo-scout/issues)
+- **Issues**: [GitHub Issues](https://github.com/bshepp/repo_analyzer_agent/issues)
 - **Documentation**: This README and inline code documentation
-- **Examples**: See the `examples/` directory (coming soon)
 
 ---
 

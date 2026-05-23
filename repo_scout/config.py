@@ -149,4 +149,4 @@ class Config:
     @classmethod
     def get_user_agent(cls) -> str:
         """Get user agent string for API requests"""
-        return "Repository-Scout/0.1.0 (https://github.com/repo-scout/repo-scout)"
+        return "Repository-Scout/0.1.0 (https://github.com/bshepp/repo_analyzer_agent)"
